@@ -1,0 +1,554 @@
+import { MapGrid, Position, RoomTheme } from './types';
+
+const MAP_WIDTH = 50;
+const MAP_HEIGHT = 28;
+
+export interface Room {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  theme: RoomTheme;
+}
+
+function roomCenter(r: Room): Position {
+  return { x: r.x + Math.floor(r.w / 2), y: r.y + Math.floor(r.h / 2) };
+}
+
+function roomsOverlap(a: Room, b: Omit<Room, 'theme'>): boolean {
+  return (
+    a.x - 1 <= b.x + b.w &&
+    a.x + a.w >= b.x - 1 &&
+    a.y - 1 <= b.y + b.h &&
+    a.y + a.h >= b.y - 1
+  );
+}
+
+function carveHCorridor(map: MapGrid, x1: number, x2: number, y: number) {
+  const minX = Math.min(x1, x2);
+  const maxX = Math.max(x1, x2);
+  for (let x = minX; x <= maxX; x++) {
+    if (y >= 0 && y < map.length && x >= 0 && x < map[0].length) {
+      if (map[y][x].type === 'wall') {
+        map[y][x] = { type: 'floor', emoji: '⬜', seen: false, visible: false };
+      }
+    }
+  }
+}
+
+function carveVCorridor(map: MapGrid, y1: number, y2: number, x: number) {
+  const minY = Math.min(y1, y2);
+  const maxY = Math.max(y1, y2);
+  for (let y = minY; y <= maxY; y++) {
+    if (y >= 0 && y < map.length && x >= 0 && x < map[0].length) {
+      if (map[y][x].type === 'wall') {
+        map[y][x] = { type: 'floor', emoji: '⬜', seen: false, visible: false };
+      }
+    }
+  }
+}
+
+function placeBossRoom(map: MapGrid, room: Room) {
+  for (let ry = room.y; ry < room.y + room.h; ry++) {
+    for (let rx = room.x; rx < room.x + room.w; rx++) {
+      if (map[ry][rx].type === 'floor') {
+        map[ry][rx] = { type: 'boss-floor', emoji: '🟥', seen: false, visible: false };
+      }
+    }
+  }
+}
+
+function placeDoors(map: MapGrid, rooms: Room[]) {
+  for (const room of rooms) {
+    if (room.theme === 'shop') continue;
+    for (let rx = room.x; rx < room.x + room.w; rx++) {
+      for (let ry = room.y; ry < room.y + room.h; ry++) {
+        const isPerimeter =
+          rx === room.x || rx === room.x + room.w - 1 ||
+          ry === room.y || ry === room.y + room.h - 1;
+        if (!isPerimeter) continue;
+        if (map[ry][rx].type !== 'floor') continue;
+
+        const dirs: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dx, dy] of dirs) {
+          const nx = rx + dx;
+          const ny = ry + dy;
+          const outsideRoom =
+            nx < room.x || nx >= room.x + room.w ||
+            ny < room.y || ny >= room.y + room.h;
+          if (!outsideRoom) continue;
+          if (ny < 0 || ny >= map.length || nx < 0 || nx >= map[0].length) continue;
+          if (map[ny][nx].type === 'floor') {
+            // Only place a door when the two perpendicular neighbours are walls —
+            // this ensures the door sits in a one-tile-wide corridor/hallway
+            // entry rather than floating along an open room wall.
+            const tile1 = map[ry + dx]?.[rx + dy];
+            const tile2 = map[ry - dx]?.[rx - dy];
+            const side1Wall = !tile1 || tile1.type === 'wall';
+            const side2Wall = !tile2 || tile2.type === 'wall';
+            if (side1Wall && side2Wall) {
+              map[ry][rx] = { type: 'door-closed', emoji: '🚪', seen: false, visible: false };
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+}
+
+/** Market vault: safe floor with a shrine + shop stalls arranged around it. */
+function placeMarketVault(map: MapGrid, room: Room) {
+  for (let ry = room.y; ry < room.y + room.h; ry++) {
+    for (let rx = room.x; rx < room.x + room.w; rx++) {
+      if (map[ry][rx].type === 'floor') {
+        map[ry][rx] = { type: 'safe-floor', emoji: '⬜', seen: false, visible: false };
+      }
+    }
+  }
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  map[cy][cx] = { type: 'shrine', emoji: '🛕', seen: false, visible: false };
+  // Shop stalls at cardinal offsets — bounds-checked so any room size works
+  const stalls: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  for (const [dx, dy] of stalls) {
+    const sx = cx + dx, sy = cy + dy;
+    if (sx > room.x && sx < room.x + room.w - 1 && sy > room.y && sy < room.y + room.h - 1) {
+      map[sy][sx] = { type: 'shop-item', emoji: '🍺', seen: false, visible: false };
+    }
+  }
+}
+
+/** Water moat: flood the room + a wide border with water, leaving only a tiny 3×3 island at center. */
+function placeWaterMoat(map: MapGrid, room: Room) {
+  const moat = 2; // tiles of water beyond the room edges
+  // Flood everything — room interior and the surrounding moat border
+  for (let ry = room.y - moat; ry <= room.y + room.h - 1 + moat; ry++) {
+    for (let rx = room.x - moat; rx <= room.x + room.w - 1 + moat; rx++) {
+      if (ry < 0 || ry >= MAP_HEIGHT || rx < 0 || rx >= MAP_WIDTH) continue;
+      if (map[ry][rx].type === 'boss-floor') continue;
+      map[ry][rx] = { type: 'water', emoji: '🌊', seen: false, visible: false };
+    }
+  }
+  // Carve a 3×3 island at the room center (items spawn here, centered ±1 x)
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  for (let ry = cy - 1; ry <= cy + 1; ry++) {
+    for (let rx = cx - 1; rx <= cx + 1; rx++) {
+      if (ry < 0 || ry >= MAP_HEIGHT || rx < 0 || rx >= MAP_WIDTH) continue;
+      map[ry][rx] = { type: 'floor', emoji: '⬜', seen: false, visible: false };
+    }
+  }
+}
+
+function placeTrees(map: MapGrid, room: Room) {
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  const density = 0.25;
+
+  for (let ry = room.y + 1; ry < room.y + room.h - 1; ry++) {
+    for (let rx = room.x + 1; rx < room.x + room.w - 1; rx++) {
+      if (rx === cx || ry === cy) continue;
+      if (map[ry][rx].type !== 'floor') continue;
+      if (Math.random() < density) {
+        map[ry][rx] = { type: 'tree', emoji: '🌲', seen: false, visible: false };
+      }
+    }
+  }
+}
+
+function placeCampfire(map: MapGrid, room: Room) {
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  const offsets: [number, number][] = [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1]];
+  for (const [dx, dy] of offsets) {
+    const ax = cx + dx, ay = cy + dy;
+    if (ay >= room.y + 1 && ay < room.y + room.h - 1 && ax >= room.x + 1 && ax < room.x + room.w - 1) {
+      if (map[ay][ax].type === 'floor') {
+        map[ay][ax] = { type: 'campfire', emoji: '🔥', seen: false, visible: false };
+        return;
+      }
+    }
+  }
+}
+
+function placeShrine(map: MapGrid, room: Room) {
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  map[cy][cx] = { type: 'shrine', emoji: '🛕', seen: false, visible: false };
+}
+
+function placeShop(map: MapGrid, room: Room) {
+  for (let ry = room.y; ry < room.y + room.h; ry++) {
+    for (let rx = room.x; rx < room.x + room.w; rx++) {
+      if (map[ry][rx].type === 'floor') {
+        map[ry][rx] = { type: 'safe-floor', emoji: '⬜', seen: false, visible: false };
+      }
+    }
+  }
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  map[cy][cx] = { type: 'shop-item', emoji: '🏪', seen: false, visible: false };
+}
+
+function placeRestaurant(map: MapGrid, room: Room) {
+  for (let ry = room.y; ry < room.y + room.h; ry++) {
+    for (let rx = room.x; rx < room.x + room.w; rx++) {
+      if (map[ry][rx].type === 'floor') {
+        map[ry][rx] = { type: 'safe-floor', emoji: '⬜', seen: false, visible: false };
+      }
+    }
+  }
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  map[cy][cx] = { type: 'restaurant', emoji: '🏪', seen: false, visible: false };
+}
+
+/** Ammo cache crate: placed in the start room on boss floors. Offset from spawn point. */
+function placeAmmoCache(map: MapGrid, room: Room) {
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  // Try offsets in order — skip the exact spawn point, pick the first floor tile found
+  const offsets: [number, number][] = [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1]];
+  for (const [dx, dy] of offsets) {
+    const ax = cx + dx, ay = cy + dy;
+    if (ay >= room.y && ay < room.y + room.h && ax >= room.x && ax < room.x + room.w) {
+      if (map[ay][ax].type === 'floor') {
+        map[ay][ax] = { type: 'shop-item', emoji: '📦', seen: false, visible: false };
+        return;
+      }
+    }
+  }
+}
+
+// ── Water feature generators ──────────────────────────────────────────────
+
+/** Organic blob flood-fill — grows outward from a seed wall tile. */
+function placeWaterBlob(map: MapGrid, startY: number, startX: number, targetSize: number): void {
+  const frontier: [number, number][] = [[startY, startX]];
+  const seen = new Set<string>();
+  seen.add(`${startY},${startX}`);
+  let placed = 0;
+
+  while (frontier.length > 0 && placed < targetSize) {
+    const idx = Math.floor(Math.random() * frontier.length);
+    const [y, x] = frontier.splice(idx, 1)[0];
+    if (y <= 0 || y >= MAP_HEIGHT - 1 || x <= 0 || x >= MAP_WIDTH - 1) continue;
+    if (map[y][x].type !== 'wall') continue;
+
+    map[y][x] = { type: 'water', emoji: '🌊', seen: false, visible: false };
+    placed++;
+
+    const dirs: [number, number][] = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+    for (const [dy, dx] of dirs) {
+      const ny = y + dy, nx = x + dx;
+      const key = `${ny},${nx}`;
+      if (!seen.has(key) && Math.random() < 0.72) {
+        seen.add(key);
+        frontier.push([ny, nx]);
+      }
+    }
+  }
+}
+
+/** Drunkard's walk river that enters from one edge and exits the opposite. */
+function placeRiver(map: MapGrid): void {
+  const horizontal = Math.random() < 0.5;
+  const width = Math.random() < 0.45 ? 2 : 1;
+
+  let curY: number, curX: number, targetX: number, targetY: number;
+  if (horizontal) {
+    curY = 2 + Math.floor(Math.random() * (MAP_HEIGHT - 4));
+    curX = 1;
+    targetY = 2 + Math.floor(Math.random() * (MAP_HEIGHT - 4));
+    targetX = MAP_WIDTH - 2;
+  } else {
+    curX = 2 + Math.floor(Math.random() * (MAP_WIDTH - 4));
+    curY = 1;
+    targetX = 2 + Math.floor(Math.random() * (MAP_WIDTH - 4));
+    targetY = MAP_HEIGHT - 2;
+  }
+
+  const maxSteps = MAP_WIDTH + MAP_HEIGHT + 20;
+  for (let step = 0; step < maxSteps; step++) {
+    for (let w = 0; w < width; w++) {
+      const wy = horizontal ? curY + w : curY;
+      const wx = horizontal ? curX : curX + w;
+      if (wy > 0 && wy < MAP_HEIGHT - 1 && wx > 0 && wx < MAP_WIDTH - 1) {
+        if (map[wy][wx].type === 'wall') {
+          map[wy][wx] = { type: 'water', emoji: '🌊', seen: false, visible: false };
+        }
+      }
+    }
+
+    if (horizontal) {
+      if (curX >= targetX) break;
+      curX++;
+      if (Math.random() < 0.28) {
+        curY += Math.sign(targetY - curY) || (Math.random() < 0.5 ? 1 : -1);
+        curY = Math.max(1, Math.min(MAP_HEIGHT - 2 - width, curY));
+      }
+    } else {
+      if (curY >= targetY) break;
+      curY++;
+      if (Math.random() < 0.28) {
+        curX += Math.sign(targetX - curX) || (Math.random() < 0.5 ? 1 : -1);
+        curX = Math.max(1, Math.min(MAP_WIDTH - 2 - width, curX));
+      }
+    }
+  }
+}
+
+// ── Connectivity helpers ──────────────────────────────────────────────────
+
+const MAPGEN_DIRS: [number, number][] = [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[1,-1],[-1,1],[1,1]];
+const posKey = (p: Position) => `${p.x},${p.y}`;
+
+/** Returns true if `to` is BFS-reachable from `from` using only `passable` tile types. */
+function reach(map: MapGrid, from: Position, to: Position, passable: Set<string>): boolean {
+  const visited = new Set<string>([posKey(from)]);
+  const queue = [from];
+  while (queue.length) {
+    const pos = queue.shift()!;
+    if (pos.x === to.x && pos.y === to.y) return true;
+    for (const [dx, dy] of MAPGEN_DIRS) {
+      const nx = pos.x + dx, ny = pos.y + dy;
+      if (ny < 0 || ny >= map.length || nx < 0 || nx >= map[0].length) continue;
+      if (!passable.has(map[ny][nx].type)) continue;
+      const k = posKey({ x: nx, y: ny });
+      if (!visited.has(k)) { visited.add(k); queue.push({ x: nx, y: ny }); }
+    }
+  }
+  return false;
+}
+
+/** BFS shortest path from `from` to `to`; returns the sequence of positions or null. */
+function shortestPath(map: MapGrid, from: Position, to: Position, passable: Set<string>): Position[] | null {
+  const parent = new Map<string, string | null>();
+  const positions = new Map<string, Position>();
+  const queue = [from];
+  parent.set(posKey(from), null);
+  positions.set(posKey(from), from);
+  while (queue.length) {
+    const pos = queue.shift()!;
+    const pk = posKey(pos);
+    if (pos.x === to.x && pos.y === to.y) {
+      const path: Position[] = [];
+      let k: string | null | undefined = pk;
+      while (k !== null && k !== undefined) {
+        path.push(positions.get(k)!);
+        k = parent.get(k);
+      }
+      return path.reverse();
+    }
+    for (const [dx, dy] of MAPGEN_DIRS) {
+      const nx = pos.x + dx, ny = pos.y + dy;
+      if (ny < 0 || ny >= map.length || nx < 0 || nx >= map[0].length) continue;
+      if (!passable.has(map[ny][nx].type)) continue;
+      const nPos = { x: nx, y: ny };
+      const nk = posKey(nPos);
+      if (!parent.has(nk)) {
+        parent.set(nk, pk);
+        positions.set(nk, nPos);
+        queue.push(nPos);
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Guarantees a dry-walkable path from `start` to `stairs`.
+ * If water features have cut the corridor, drains the minimum set of water
+ * tiles on the shortest water-inclusive path, turning them back to floor.
+ */
+function ensureStairsReachable(map: MapGrid, start: Position, stairs: Position): void {
+  const DRY = new Set([
+    'floor', 'stairs', 'boss-floor', 'grass',
+    'door-open', 'door-closed',
+    'safe-floor', 'shop-item', 'shrine', 'shrine-used',
+  ]);
+  if (reach(map, start, stairs, DRY)) return;
+
+  // Path blocked by water — find route crossing water, then drain just those tiles
+  const WET = new Set([...DRY, 'water']);
+  const path = shortestPath(map, start, stairs, WET);
+  if (!path) return; // fully disconnected — shouldn't occur in a connected dungeon
+  for (const p of path) {
+    if (map[p.y][p.x].type === 'water') {
+      map[p.y][p.x] = { type: 'floor', emoji: '⬜', seen: false, visible: false };
+    }
+  }
+}
+
+/** Replace scatterWater with coherent water features: ponds, lakes, and optional rivers. */
+function placeWaterFeatures(map: MapGrid, floor: number): void {
+  const numBlobs = 1 + Math.floor(Math.random() * 3);
+
+  for (let i = 0; i < numBlobs; i++) {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const sx = 3 + Math.floor(Math.random() * (MAP_WIDTH - 6));
+      const sy = 3 + Math.floor(Math.random() * (MAP_HEIGHT - 6));
+      if (map[sy][sx].type !== 'wall') continue;
+      const isLake = Math.random() < 0.28;
+      const size = isLake
+        ? 28 + Math.floor(Math.random() * 22)
+        :  7 + Math.floor(Math.random() * 11);
+      placeWaterBlob(map, sy, sx, size);
+      break;
+    }
+  }
+
+  const riverChance = Math.min(0.80, 0.10 + (floor - 1) * 0.10);
+  if (Math.random() < riverChance) placeRiver(map);
+}
+
+export function generateMap(floor: number): { map: MapGrid; startPos: Position; stairsPos: Position; rooms: Room[] } {
+  const map: MapGrid = Array(MAP_HEIGHT)
+    .fill(null)
+    .map(() => Array(MAP_WIDTH).fill(null).map(() => ({ type: 'wall', emoji: '⬛', seen: false, visible: false })));
+
+  const minRooms = 6 + Math.min(floor - 1, 4);
+  const maxRooms = 10 + Math.min(floor - 1, 6);
+  const targetRooms = minRooms + Math.floor(Math.random() * (maxRooms - minRooms + 1));
+
+  const rooms: Room[] = [];
+  let attempts = 0;
+
+  while (rooms.length < targetRooms && attempts < 200) {
+    attempts++;
+    const w = 4 + Math.floor(Math.random() * 7);
+    const h = 3 + Math.floor(Math.random() * 5);
+    const x = 1 + Math.floor(Math.random() * (MAP_WIDTH - w - 2));
+    const y = 1 + Math.floor(Math.random() * (MAP_HEIGHT - h - 2));
+    const candidate = { x, y, w, h };
+
+    if (rooms.some(r => roomsOverlap(r, candidate))) continue;
+
+    for (let ry = y; ry < y + h; ry++) {
+      for (let rx = x; rx < x + w; rx++) {
+        map[ry][rx] = { type: 'floor', emoji: '⬜', seen: false, visible: false };
+      }
+    }
+
+    if (rooms.length > 0) {
+      const prev = roomCenter(rooms[rooms.length - 1]);
+      const curr = { x: x + Math.floor(w / 2), y: y + Math.floor(h / 2) };
+      if (Math.random() < 0.5) {
+        carveHCorridor(map, prev.x, curr.x, prev.y);
+        carveVCorridor(map, prev.y, curr.y, curr.x);
+      } else {
+        carveVCorridor(map, prev.y, curr.y, prev.x);
+        carveHCorridor(map, prev.x, curr.x, curr.y);
+      }
+    }
+
+    rooms.push({ x, y, w, h, theme: 'normal' });
+  }
+
+  // Boss floors: designate last room as boss arena
+  const isBossFloor = floor % 5 === 0;
+  if (isBossFloor && rooms.length > 0) {
+    rooms[rooms.length - 1] = { ...rooms[rooms.length - 1], theme: 'boss' };
+  }
+
+  // Assign themes — skip first room (start) and last room (boss room or stairs room)
+  const lastMiddle = rooms.length - 2;
+  const middleIndices = rooms.map((_, i) => i).slice(1, lastMiddle + 1);
+  const shuffled = [...middleIndices].sort(() => Math.random() - 0.5);
+
+  const shrineChance      = Math.min(0.9,  0.40 + (floor - 1) * 0.10);
+  const shopChance        = Math.min(0.85, 0.35 + (floor - 1) * 0.08);
+  const restaurantChance  = Math.min(0.45, 0.15 + (floor - 1) * 0.04);
+  const marketChance      = Math.min(0.70, 0.25 + (floor - 1) * 0.06);
+  const denChance         = Math.min(0.80, 0.20 + (floor - 1) * 0.08);
+  const treasureChance    = Math.min(0.65, 0.20 + (floor - 1) * 0.06);
+
+  let shrineAssigned      = false;
+  let shopAssigned        = false;
+  let restaurantAssigned  = false;
+  let marketAssigned      = false;
+  let denAssigned         = false;
+  let treasureAssigned    = false;
+
+  for (const idx of shuffled) {
+    const r = rooms[idx];
+    if (!shrineAssigned && Math.random() < shrineChance) {
+      rooms[idx] = { ...r, theme: 'shrine' };
+      shrineAssigned = true;
+      continue;
+    }
+    if (!shopAssigned && Math.random() < shopChance) {
+      rooms[idx] = { ...r, theme: 'shop' };
+      shopAssigned = true;
+      continue;
+    }
+    if (!restaurantAssigned && r.w >= 4 && r.h >= 4 && Math.random() < restaurantChance) {
+      rooms[idx] = { ...r, theme: 'restaurant' };
+      restaurantAssigned = true;
+      continue;
+    }
+    // Market vault: shrine + shop stalls in one room; needs w≥5 h≥4
+    if (!marketAssigned && r.w >= 5 && r.h >= 4 && Math.random() < marketChance) {
+      rooms[idx] = { ...r, theme: 'market' };
+      marketAssigned = true;
+      continue;
+    }
+    // Monster den: every interior tile packed with enemies
+    if (!denAssigned && r.w >= 4 && r.h >= 3 && Math.random() < denChance) {
+      rooms[idx] = { ...r, theme: 'monster-den' };
+      denAssigned = true;
+      continue;
+    }
+    // Treasure vault: water-moated island — appears at most once per floor
+    if (!treasureAssigned && Math.random() < treasureChance) {
+      rooms[idx] = { ...r, theme: 'treasure-vault' };
+      treasureAssigned = true;
+      continue;
+    }
+  }
+
+  // Forest rooms: any remaining normal room with enough space
+  const forestDensity = Math.min(0.5, 0.15 + (floor - 1) * 0.07);
+  for (let i = 1; i < rooms.length - 1; i++) {
+    const room = rooms[i];
+    if (room.theme !== 'normal') continue;
+    if (room.w >= 5 && room.h >= 4 && Math.random() < forestDensity) {
+      rooms[i] = { ...room, theme: 'forest' };
+    }
+  }
+
+  // Place doors at room entrances (corridor–room junctions)
+  placeDoors(map, rooms);
+
+  // Apply theme decorations
+  for (const room of rooms) {
+    if (room.theme === 'forest')         { placeTrees(map, room); placeCampfire(map, room); }
+    else if (room.theme === 'shrine')    placeShrine(map, room);
+    else if (room.theme === 'shop')      placeShop(map, room);
+    else if (room.theme === 'restaurant') placeRestaurant(map, room);
+    else if (room.theme === 'boss')      placeBossRoom(map, room);
+    else if (room.theme === 'market')    placeMarketVault(map, room);
+    else if (room.theme === 'treasure-vault') placeWaterMoat(map, room);
+    // monster-den: no tile treatment — enemy packing is handled in game.tsx
+  }
+
+  // Boss floors: place an ammo cache crate in the start room so players can resupply
+  if (isBossFloor && rooms.length > 0) {
+    placeAmmoCache(map, rooms[0]);
+  }
+
+  // Place coherent water features: ponds, lakes, rivers
+  placeWaterFeatures(map, floor);
+
+  const startPos = roomCenter(rooms[0]);
+  const lastRoom = rooms[rooms.length - 1];
+  const stairsPos = roomCenter(lastRoom);
+  map[stairsPos.y][stairsPos.x] = { type: 'stairs', emoji: '🕳️', seen: false, visible: false };
+
+  // Guarantee the stairs are reachable without swimming — drain any water tiles
+  // that block the shortest path between start and stairs.
+  ensureStairsReachable(map, startPos, stairsPos);
+
+  return { map, startPos, stairsPos, rooms };
+}
