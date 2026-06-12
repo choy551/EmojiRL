@@ -29,3 +29,5 @@ lerna-debug.log*
 
 # OS
 Thumbs.db
+
+pm-workspace.yaml
