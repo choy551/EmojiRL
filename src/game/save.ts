@@ -70,8 +70,10 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     mana:                 rawStats.mana                  as number | undefined,
     maxMana:              rawStats.maxMana               as number | undefined,
     activeBuffs:          (rawStats.activeBuffs          as PlayerStats['activeBuffs']) ?? [],
-    blinkStrikeCooldown:  rawStats.blinkStrikeCooldown   as number | undefined,
-    overhealDecayTick:    rawStats.overhealDecayTick     as number | undefined,
+    blinkStrikeCooldown:           rawStats.blinkStrikeCooldown            as number | undefined,
+    blinkStrikeInstakillChain:     rawStats.blinkStrikeInstakillChain      as number | undefined,
+    blinkStrikeInstakillOutOfCombat: rawStats.blinkStrikeInstakillOutOfCombat as number | undefined,
+    overhealDecayTick:             rawStats.overhealDecayTick             as number | undefined,
   };
 
   // ── Player ────────────────────────────────────────────────────────────────

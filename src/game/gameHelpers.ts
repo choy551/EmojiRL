@@ -1429,6 +1429,16 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
   });
 }
 
+export function isNonStackableBagPassiveDuplicate(item: EmojiItem, inv: EmojiItem[]): boolean {
+  if (!item.bagPassive?.nonStackable) return false;
+  return inv.some(i => !i.consumed && !i.isEquipment && i.emoji === item.emoji && !!i.bagPassive);
+}
+
+export function isActiveKindDuplicate(item: EmojiItem, inv: EmojiItem[]): boolean {
+  if (!item.activeKind) return false;
+  return inv.some(i => !i.consumed && i.emoji === item.emoji && i.activeKind);
+}
+
 export function addToBag(
   inv: EmojiItem[],
   bank: EmojiItem[],
@@ -1441,12 +1451,10 @@ export function addToBag(
   for (const item of items) {
     if (item.isEquipment) { newBank.push(item); continue; }
     if (item.bagPassive?.nonStackable) {
-      const alreadyActive = newInv.some(i => !i.consumed && !i.isEquipment && i.emoji === item.emoji && i.bagPassive);
-      if (alreadyActive) { newBank.push(item); nonStackableBanked.push(item); continue; }
+      if (isNonStackableBagPassiveDuplicate(item, newInv)) { newBank.push(item); nonStackableBanked.push(item); continue; }
     }
     if (item.activeKind) {
-      const alreadyActive = newInv.some(i => !i.consumed && i.emoji === item.emoji && i.activeKind);
-      if (alreadyActive) { newBank.push(item); duplicateActiveBanked.push(item); continue; }
+      if (isActiveKindDuplicate(item, newInv)) { newBank.push(item); duplicateActiveBanked.push(item); continue; }
     }
     if (isStackableBagPassive(item)) {
       const cap = STACKABLE_BAG_CAPS[item.emoji] ?? 9;
@@ -1503,10 +1511,15 @@ export function refillBagFromBank(inventory: EmojiItem[], bank: EmojiItem[]): { 
     }
   }
 
-  // Find first non-equipment item in bank to pull into bag
+  // Find first *safe* non-equipment item in bank to pull into bag.
+  // Skip duplicates of nonStackable bag passives or activeKind items (only one allowed in hotbar/inventory).
   const bagCount = inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment).length;
   if (bagCount >= 9) return { inventory, bank };
-  const pullIdx = bank.findIndex(i => !i.isEquipment);
+  const pullIdx = bank.findIndex(i =>
+    !i.isEquipment &&
+    !isNonStackableBagPassiveDuplicate(i, inventory) &&
+    !isActiveKindDuplicate(i, inventory)
+  );
   if (pullIdx === -1) return { inventory, bank };
   const pulled = bank[pullIdx];
   const newBank = [...bank.slice(0, pullIdx), ...bank.slice(pullIdx + 1)];

@@ -53,6 +53,7 @@ export interface PlayerStats {
   activeBuffs?: ActiveBuff[];
   blinkStrikeCooldown?: number;
   blinkStrikeInstakillChain?: number;
+  blinkStrikeInstakillOutOfCombat?: number;
   overhealDecayTick?: number;
 }
 

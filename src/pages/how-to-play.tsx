@@ -212,7 +212,7 @@ export default function HowToPlay({
 
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-              Items
+              Items &amp; Bag
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
@@ -224,7 +224,19 @@ export default function HowToPlay({
               <div className="flex items-center gap-2">
                 <Kbd>1</Kbd>–<Kbd>9</Kbd>
                 <span className="text-muted-foreground">
-                  — activate emoji soul from inventory
+                  — activate emoji soul or use hotbar item (1–9)
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Kbd>B</Kbd>
+                <span className="text-muted-foreground">
+                  — open full Bag (Hotbar / Equipment / Bank tabs). Inside: arrows/WASD/numpad to navigate, Tab to switch tabs, Enter/Space to act or assign, 1–9 to quick-assign selected to hotbar.
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Kbd>F</Kbd>
+                <span className="text-muted-foreground">
+                  — cook raw food at a nearby campfire (turns into stronger cooked version)
                 </span>
               </div>
             </div>
@@ -232,26 +244,38 @@ export default function HowToPlay({
 
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-              Tactics
+              Tactics &amp; Class Abilities
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
                 <Kbd>T</Kbd>
                 <span className="text-muted-foreground">
-                  — open tactics menu (class-specific abilities)
+                  — open tactics menu (class-specific abilities &amp; modes). Use number keys 1–4 inside the menu:
                 </span>
+              </div>
+              <div className="ml-4 text-xs text-muted-foreground space-y-0.5">
+                • <strong>Wizard 🧙</strong>: 1 nearest / 2 furthest / 3 manual / 4 hold-fire (Arcane Barrage tactics)<br />
+                • <strong>Ninja 🥷</strong>: 1 enter Blink target mode / 2–3 stealth modes / 4 toggle auto-stealth<br />
+                • <strong>Ranger 🧝</strong>: 1 ranged / 2 melee / 3 flee (Trailblaze)<br />
+                • <strong>Cowboy 🤠</strong>: 1 yeehaw tactics (special flavor/ability)
               </div>
               <div className="flex items-center gap-2">
                 <Kbd>X</Kbd>
                 <span className="text-muted-foreground">
-                  — Ninja only: activate Blink Strike (teleport &amp; 2× strike, 8t cooldown). Instakilling resets the cooldown to 0 — chain up to 3 instakills in a row for instant resets, then each further instakill gives a reduced 3t cooldown instead. Regular kills reduce to 7t; missing gives full 8t.
+                  — Ninja only: activate Blink Strike (teleport &amp; 2× strike, 8t cooldown). Instakilling resets the cooldown to 0 — chain up to 3 instakills in a row for instant resets, then each further instakill gives a reduced 3t cooldown instead. Regular kills reduce to 7t; missing gives full 8t. The instakill chain (2/3 or 3/3) fades back to 0 after 10 turns out of combat.
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <Kbd>Tab</Kbd>
                 <Kbd>Shift+Tab</Kbd>
                 <span className="text-muted-foreground">
-                  — cycle ranged target (Wizard / Ranger / Cowboy dual pistols)
+                  — cycle ranged attack target (Wizard / Ranger / Cowboy dual pistols) or inspect nearest enemy. Also used for navigation/cycling inside menus and bank.
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Kbd>I</Kbd>
+                <span className="text-muted-foreground">
+                  — (with Tab) inspect nearest visible enemy or cycle targets
                 </span>
               </div>
             </div>
@@ -287,16 +311,38 @@ export default function HowToPlay({
               <div className="flex items-center gap-2">
                 <Kbd>Shift+Tab</Kbd>
                 <span className="text-muted-foreground">
-                  — cycle to previous enemy
+                  — cycle to previous enemy / target (also nav in bank modal)
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Kbd>/</Kbd>
+                <span className="text-muted-foreground">or</span>
+                <Kbd>Numpad /</Kbd>
+                <span className="text-muted-foreground">
+                  — toggle combat log
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <Kbd>Esc</Kbd>
                 <span className="text-muted-foreground">
-                  — close menus / cancel inspect
+                  — close menus, cancel modes (inspect, blink target, direction pick, etc.), or open pause menu
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Kbd>C</Kbd>
+                <span className="text-muted-foreground">
+                  — close adjacent open door
                 </span>
               </div>
             </div>
+          </div>
+
+          <div className="text-xs text-muted-foreground mt-2">
+            <strong>Special modes:</strong> When using bombs, guns, boomerang, rope, or freeze (from hotbar 1–9 or tactics), you enter direction-pick mode — use any movement keys (arrows/WASD/numpad) to fire in that direction. Esc cancels.
+          </div>
+
+          <div className="text-xs text-muted-foreground mt-1">
+            <strong>Companions (recruited adventurers):</strong> Bump into them (move into their tile) to swap places — very useful in 1×1 hallways to avoid blocking/soft-locks. They follow you, fight hostiles, and can be commanded somewhat via the bag.
           </div>
         </div>
       </Section>
@@ -325,6 +371,7 @@ export default function HowToPlay({
               label: "Campfire",
               desc: "Found in forest rooms. Stand nearby and press F to cook raw food into powerful cooked versions. Resting nearby heals +2 extra HP per turn.",
             },
+            { icon: "📦", label: "Ammo Cache", desc: "Special shop tile (📦). Re-interact (z/Enter/Space on the tile) for class-specific ammo resupply before bosses." },
           ].map((t) => (
             <div
               key={t.label}
@@ -337,6 +384,10 @@ export default function HowToPlay({
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="mt-3 text-xs text-muted-foreground">
+          <strong>Dungeon Pressure:</strong> Increases on deeper floors — nearby enemies get permanent stat bonuses (watch for on-screen warnings). <strong>Vaults &amp; special rooms:</strong> Use rope (from hotbar or tactics) to safely enter. Treasure vaults offer big rewards (risk of traps); monster dens are extra dangerous. Autoexplore stops at shops, restaurants, and bars.
         </div>
       </Section>
 

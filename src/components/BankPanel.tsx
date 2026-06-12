@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { EmojiItem, Player } from '../game/types';
 import { hasBagPassive, getPassiveTooltipSuffix, isStackableBagPassive, getStackableBonusLabel } from '../game/passives';
+import { isNonStackableBagPassiveDuplicate, isActiveKindDuplicate } from '../game/gameHelpers';
 import { activeKindEmoji } from './itemUtils';
 import { ActivePassivesPanel } from './ActivePassivesPanel';
 
@@ -86,21 +87,25 @@ export function BankPanel({
         const si = player.bank.find(i => i.id === selectedItemId)!;
         const canConsume = !si.isEquipment && !si.activeKind && (si.healAmount !== undefined || (si as any).effect || si.bagPassive);
         const needsHotbar = !si.isEquipment && !!si.activeKind;
+        const alreadyActiveNonStack = (si.bagPassive?.nonStackable ?? false) && isNonStackableBagPassiveDuplicate(si, player.inventory);
+        const alreadyActiveKind = !!si.activeKind && isActiveKindDuplicate(si, player.inventory);
+        const wouldBeDuplicate = alreadyActiveNonStack || alreadyActiveKind;
         return (
           <div className="bg-black/30 rounded-lg p-2.5 text-xs space-y-1 border border-primary/30 mb-3">
             <div className="font-bold text-foreground">{si.emoji} {si.name}</div>
             <div className="text-muted-foreground/70 leading-snug">{si.description}</div>
             {hasBagPassive(si) && (() => {
               const alreadyActive = (si.bagPassive?.nonStackable ?? false)
-                ? player.inventory.some(i => !i.consumed && !i.isEquipment && i.emoji === si.emoji && i.bagPassive)
+                ? isNonStackableBagPassiveDuplicate(si, player.inventory)
                 : false;
               return alreadyActive
                 ? <div className="text-zinc-400/70 text-[10px] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-zinc-500/70 inline-block shrink-0" />Passive: {si.bagPassive!.description} <span className="text-zinc-500">(already active)</span></div>
                 : <div className="text-green-400/80 text-[10px] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_3px_rgba(74,222,128,0.9)] inline-block shrink-0" />Passive: {si.bagPassive!.description}</div>;
             })()}
-            {needsHotbar && <div className="text-amber-400/70 text-[10px]">Pull to hotbar to activate this item.</div>}
+            {needsHotbar && !wouldBeDuplicate && <div className="text-amber-400/70 text-[10px]">Pull to hotbar to activate this item.</div>}
+            {needsHotbar && wouldBeDuplicate && <div className="text-amber-400/70 text-[10px]">You already carry this active ability.</div>}
             <div className="flex gap-1.5 pt-0.5">
-              {!si.isEquipment && (
+              {!si.isEquipment && !wouldBeDuplicate && (
                 <button
                   onClick={() => {
                     const bagNonHeal = player.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined);

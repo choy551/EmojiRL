@@ -595,11 +595,18 @@ export default function Game() {
   useEffect(() => { handleWaitRef.current = handleWait; }, [handleWait]);
 
   // ── auto-rest interval ────────────────────────────────────────────────────
+  // Heals faster (shorter tick interval) the more HP the player currently has.
+  // This reduces real-world waiting time as the player recovers, without changing manual wait (Z).
   useEffect(() => {
     if (!autoRest) return;
-    const interval = setInterval(() => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = () => {
       const state = gameStateRef.current;
-      if (!state || state.gameOver) { setAutoRest(false); return; }
+      if (!state || state.gameOver || !autoRest) {
+        setAutoRest(false);
+        return;
+      }
 
       const isWizard = state.player.characterClass === '🧙';
       const hpFull = state.player.stats.hp >= state.player.stats.maxHp;
@@ -628,8 +635,22 @@ export default function Game() {
       }
 
       handleWait();
-    }, 200);
-    return () => clearInterval(interval);
+
+      // Re-read live state after the wait to compute dynamic speed.
+      // Faster (smaller delay) the higher the current HP ratio.
+      const curr = gameStateRef.current;
+      if (!curr) return;
+      const hp = curr.player.stats.hp;
+      const maxHp = curr.player.stats.maxHp || 1;
+      const ratio = Math.max(0, Math.min(1, hp / maxHp));
+      const delay = Math.max(60, Math.floor(260 - 200 * ratio));
+      timeout = setTimeout(tick, delay);
+    };
+
+    timeout = setTimeout(tick, 200);
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
   }, [autoRest, handleWait, addLog]);
 
   // ── keyboard ─────────────────────────────────────────────────────────────

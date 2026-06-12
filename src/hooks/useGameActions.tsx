@@ -11,7 +11,7 @@ import {
   moodMax, chebyshev, hasLOS, hasLOSBetween, VISION_RADIUS, visionRadiusFor,
   eagleEyeRange, PLAYER_PASSABLE_TILES, computeVisibility, computeBagPassives,
   applyEquipmentAndPassives, withVisibility, runEnemyTurns, applyEnemyTurns, tickActiveBuffs,
-  addToBag, activeKindLabel, sortBagSlots, refillBagFromBank, levelFromXP,
+  addToBag, activeKindLabel, sortBagSlots, refillBagFromBank, levelFromXP, isNonStackableBagPassiveDuplicate, isActiveKindDuplicate,
   hpBonusForLevel, mpBonusForLevel, computeNinjaEvasion, getRandomCowboyFlavor, spawnEnemies,
   spawnVaultItems, bfsStepToward, bfsNextStep, bfsNextStepWallHug, handleGodBlessedImmunity,
   getDungeonPressure, _flashSignals,
@@ -380,7 +380,27 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         markEnemySeen(enemy.emoji);
 
         if (enemy.isAdventurer && enemy.isRecruited) {
-          return prev;
+          // DCSS-style: bump into recruited companion swaps positions (prevents soft-locks in 1x1 hallways)
+          const companion = prev.enemies[enemyIndex];
+          const newEnemies = [...prev.enemies];
+          newEnemies[enemyIndex] = { ...companion, pos: { x: player.pos.x, y: player.pos.y } };
+
+          const newPlayer: Player = {
+            ...player,
+            pos: { x: companion.pos.x, y: companion.pos.y },
+          };
+
+          addLog(`You swap places with ${companion.emoji} ${companion.name}.`);
+
+          // Mood update as if moving
+          const hpRatio = newPlayer.stats.hp / newPlayer.stats.maxHp;
+          if (hpRatio < 0.3) newPlayer.stats.moodValue = Math.max(-100, newPlayer.stats.moodValue - 3);
+          else if (hpRatio < 0.5) newPlayer.stats.moodValue = Math.max(-100, newPlayer.stats.moodValue - 1);
+          if (newPlayer.stats.moodValue > 0) newPlayer.stats.moodValue = Math.max(0, newPlayer.stats.moodValue - 1);
+          else if (newPlayer.stats.moodValue < 0) newPlayer.stats.moodValue = Math.min(0, newPlayer.stats.moodValue + 1);
+
+          const newState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1 };
+          return applyEnemyTurns(newState, runEnemyTurns(newState));
         }
         if (enemy.isAdventurer && !enemy.engaged) {
           setPendingAdventurerInteraction(enemy.id);
@@ -739,13 +759,20 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
       if (tile.type === 'shrine') {
         const shrineAmt = 2 + Math.floor((prev.currentFloor - 1) / 2);
+        const oldMaxHp = newPlayer.stats.maxHp;
+        const currentOverheal = Math.max(0, newPlayer.stats.hp - oldMaxHp);
         if (cls === '🧙') {
-          const healedHp = Math.min(newPlayer.stats.maxHp, newPlayer.stats.hp + shrineAmt);
+          // Wizard shrine does not increase HP max (only MP), but must not discard existing HP overheal from bar.
+          // Just add the shrine heal amount on top of whatever (over)heal is currently present.
+          const healedHp = newPlayer.stats.hp + shrineAmt;
           const newMaxMana = (newPlayer.stats.maxMana ?? 4) + 1;
           newPlayer.stats = { ...newPlayer.stats, hp: healedHp, maxMana: newMaxMana, mana: newMaxMana };
         } else {
-          const newMaxHp = newPlayer.stats.maxHp + shrineAmt;
-          const healedHp = Math.min(newMaxHp, newPlayer.stats.hp + shrineAmt);
+          const newMaxHp = oldMaxHp + shrineAmt;
+          // Preserve any existing overheal buffer from bar (hp - oldMax) on top of the new max.
+          // Also apply the shrine's +shrineAmt heal effect without letting the max increase "eat" the buffer.
+          const shrineHealTarget = newPlayer.stats.hp + shrineAmt;
+          const healedHp = Math.max(shrineHealTarget, newMaxHp + currentOverheal);
           newPlayer.stats = { ...newPlayer.stats, maxHp: newMaxHp, hp: healedHp };
         }
         const newMap = newState.map.map((row, my) =>
@@ -953,6 +980,26 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, blinkStrikeCooldown: (newPlayer.stats.blinkStrikeCooldown ?? 1) - 1 } };
       }
 
+      // Out-of-combat decay for Blink Strike instakill chain (resets 2/3 or 3/3 after 10 turns with no engaged enemies)
+      if (cls === '🥷') {
+        const inCombat = prev.enemies.some(e => e.engaged);
+        let outTurns = newPlayer.stats.blinkStrikeInstakillOutOfCombat ?? 0;
+        if (inCombat) {
+          outTurns = 0;
+        } else {
+          outTurns += 1;
+          if (outTurns >= 10) {
+            const chain = newPlayer.stats.blinkStrikeInstakillChain ?? 0;
+            if (chain >= 2) {
+              newPlayer.stats.blinkStrikeInstakillChain = 0;
+              addLog(`🥷 Blink Strike instakill chain faded (10 turns out of combat).`);
+              outTurns = 0;
+            }
+          }
+        }
+        newPlayer.stats.blinkStrikeInstakillOutOfCombat = outTurns;
+      }
+
       // Overheal decay: every 5 turns, shed 1 HP until back to natural maxHp
       if (newPlayer.stats.hp > newPlayer.stats.maxHp) {
         const tick = ((newPlayer.stats.overhealDecayTick ?? 0) + 1);
@@ -1107,6 +1154,26 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       // Tick blink strike cooldown on wait
       if (prev.player.characterClass === '🥷' && (waitPlayer.stats.blinkStrikeCooldown ?? 0) > 0) {
         waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, blinkStrikeCooldown: (waitPlayer.stats.blinkStrikeCooldown ?? 1) - 1 } };
+      }
+
+      // Out-of-combat decay for Blink Strike instakill chain on wait
+      if (prev.player.characterClass === '🥷') {
+        const inCombat = prev.enemies.some(e => e.engaged);
+        let outTurns = waitPlayer.stats.blinkStrikeInstakillOutOfCombat ?? 0;
+        if (inCombat) {
+          outTurns = 0;
+        } else {
+          outTurns += 1;
+          if (outTurns >= 10) {
+            const chain = waitPlayer.stats.blinkStrikeInstakillChain ?? 0;
+            if (chain >= 2) {
+              waitPlayer.stats.blinkStrikeInstakillChain = 0;
+              addLog(`🥷 Blink Strike instakill chain faded (10 turns out of combat).`);
+              outTurns = 0;
+            }
+          }
+        }
+        waitPlayer.stats.blinkStrikeInstakillOutOfCombat = outTurns;
       }
 
       // Overheal decay on wait
@@ -1780,16 +1847,20 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             }
           }
         } else if (srcBankIdx !== -1) {
-          const [srcItem] = bank.splice(srcBankIdx, 1);
+          const srcItem = bank[srcBankIdx];
+          if (isNonStackableBagPassiveDuplicate(srcItem, inv) || isActiveKindDuplicate(srcItem, inv)) {
+            return prev; // prevent pulling duplicate non-stackable or active into hotbar
+          }
+          const [srcItemMoved] = bank.splice(srcBankIdx, 1);
           const dstBagItem = bagItems[dest] ?? null;
           if (dstBagItem) {
             const dstActualIdx = inv.indexOf(dstBagItem);
             bank.push(inv[dstActualIdx]);
-            inv[dstActualIdx] = srcItem;
+            inv[dstActualIdx] = srcItemMoved;
           } else if (bagItems.length < 9) {
-            inv.push(srcItem);
+            inv.push(srcItemMoved);
           } else {
-            bank.push(srcItem);
+            bank.push(srcItemMoved);
           }
         }
       } else {
@@ -1798,6 +1869,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const srcItem = srcInvIdx !== -1 ? inv[srcInvIdx] : srcBankIdx !== -1 ? bank[srcBankIdx] : null;
         const dstItem = dstInvIdx !== -1 ? inv[dstInvIdx] : dstBankIdx !== -1 ? bank[dstBankIdx] : null;
         if (!srcItem || !dstItem) return prev;
+        if (srcBankIdx !== -1 && dstInvIdx !== -1 && (isNonStackableBagPassiveDuplicate(srcItem, inv) || isActiveKindDuplicate(srcItem, inv))) {
+          return prev; // prevent introducing duplicate non-stackable/active via bank->hotbar swap
+        }
         if (srcInvIdx !== -1 && dstInvIdx !== -1) { inv[srcInvIdx] = dstItem; inv[dstInvIdx] = srcItem; }
         else if (srcBankIdx !== -1 && dstBankIdx !== -1) { bank[srcBankIdx] = dstItem; bank[dstBankIdx] = srcItem; }
         else if (srcInvIdx !== -1 && dstBankIdx !== -1) { inv[srcInvIdx] = dstItem; bank[dstBankIdx] = srcItem; }
@@ -2060,6 +2134,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         return { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, gameOver: true, killer: { name: target.name, emoji: target.emoji }, floatingTexts: [...blinkFloats, ...prev.floatingTexts] };
       }
 
+      newPlayer.stats.blinkStrikeInstakillOutOfCombat = 0;
       const midState: GameState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, killCounts: newKillCounts, floatingTexts: [...blinkFloats, ...prev.floatingTexts], ninjaFreeMoves };
       return applyEnemyTurns(withVisibility(midState), runEnemyTurns(midState));
     });
@@ -2173,6 +2248,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         return { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, gameOver: true, killer: { name: target.name, emoji: target.emoji }, floatingTexts: [...blinkFloats, ...prev.floatingTexts] };
       }
 
+      newPlayer.stats.blinkStrikeInstakillOutOfCombat = 0;
       const midState: GameState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, killCounts: newKillCounts, floatingTexts: [...blinkFloats, ...prev.floatingTexts], ninjaFreeMoves };
       return applyEnemyTurns(withVisibility(midState), runEnemyTurns(midState));
     });
