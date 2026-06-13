@@ -506,9 +506,9 @@ export default function HowToPlay({
           Most bag passives are{" "}
           <strong className="text-foreground">non-stackable</strong> — carrying
           a second copy auto-routes it to your bank with a{" "}
-          <em>"Extra → Bank (already carried)"</em> notice. But five emojis are
+          <em>"Extra → Bank (already carried)"</em> notice. But several emojis are
           designed to <strong className="text-foreground">stack</strong>: each
-          extra copy in your bag makes the effect stronger.
+          extra copy in your bag makes the effect stronger (Heart, Butterfly, Dagger, Wave, and the original five).
         </p>
         <div className="space-y-2">
           {[
@@ -575,10 +575,23 @@ export default function HowToPlay({
           ))}
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          💡 The soul power tags in the sidebar show{" "}
-          <strong className="text-foreground">×N</strong> next to stackable
-          passives so you always know your current count at a glance.
+          💡 Visual cues for emoji counts in your hotbar, bag, and sidebar:
         </p>
+        <ul className="text-xs text-muted-foreground mt-1 space-y-1 list-disc list-inside">
+          <li>
+            <span className="text-emerald-400 font-bold">Green ×N</span> — This is a{" "}
+            <strong>stackable</strong> passive emoji. Multiple copies in your bag each
+            provide extra/compounding benefit. The number shows how many are currently
+            active (up to the emoji’s cap).
+          </li>
+          <li>
+            <span className="text-sky-400 font-bold">Blue +N</span> (or xN) next to a
+            hotbar emoji — You have a <strong>non-stackable</strong> copy in your hotbar
+            plus one or more extras in the Bank. You can safely consume/eat the hotbar
+            version for its one-time stat boost; the bank copy will remain to provide
+            the passive bag effect.
+          </li>
+        </ul>
       </Section>
 
       {/* Enemies */}

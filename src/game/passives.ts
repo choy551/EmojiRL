@@ -7,11 +7,16 @@ export const STACKABLE_BAG_CAPS: Record<string, number> = {
   '🛡️': 9,  // shieldWall: no natural gameplay cap
   '🍄': 9,   // healOnKill: no natural gameplay cap
   '💎': 9,   // thorns: no natural gameplay cap
+  '❤️': 5,   // vampiricStrike: +1 HP per hit per copy
+  '🦋': 5,   // dodgeHeal: +1 HP per dodge per copy
+  '🗡️': 4,   // ninjaCombo: 25% base + ~15% per copy (capped reasonably)
+  '🌊': 5,   // combatRegen: +1 HP per turn per copy (in combat)
 };
 
 export function isStackableBagPassive(item: EmojiItem): boolean {
   const p = item.bagPassive;
-  return !!p && !!(p.shieldWall || p.healOnKill || p.bonusLoot || p.thorns || p.regeneration);
+  return !!p && !!(p.shieldWall || p.healOnKill || p.bonusLoot || p.thorns || p.regeneration ||
+    p.vampiricStrike || p.dodgeHeal || p.ninjaCombo || p.combatRegen);
 }
 
 /** Returns true if an item is actively contributing a bag passive right now. */
@@ -33,6 +38,10 @@ export function getStackableBonusLabel(item: EmojiItem): string | null {
   if (p.thorns)       return '+1 reflect dmg per ×';
   // regeneration: +1 HP every (6 − copies) turns, min 1-turn interval
   if (p.regeneration) return '+1 HP / 5 turns';
+  if (p.vampiricStrike) return '+1 HP per hit per ×';
+  if (p.dodgeHeal)      return '+1 HP on dodge per ×';
+  if (p.ninjaCombo)     return '+15% ninja combo chance per × (base 25%)';
+  if (p.combatRegen)    return '+1 HP per turn in combat per ×';
   return null;
 }
 
@@ -45,6 +54,10 @@ export function getStackableCumulativeLabel(item: EmojiItem): string | null {
   if (p.bonusLoot)    return `${Math.min(95, Math.round((0.55 + 0.15 * n) * 100))}% item drop chance`;
   if (p.thorns)       return `+${n} reflect dmg per hit`;
   if (p.regeneration) return `+1 HP every ${Math.max(1, 6 - n)} turns`;
+  if (p.vampiricStrike) return `+${n} HP per hit`;
+  if (p.dodgeHeal)      return `+${n} HP on dodge`;
+  if (p.ninjaCombo)     return `${25 + (n-1)*15}% chance of bonus ninja strike`;
+  if (p.combatRegen)    return `+${n} HP per turn in combat`;
   return null;
 }
 

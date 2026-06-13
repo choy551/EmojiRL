@@ -602,7 +602,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           newPlayer.stats.moodValue = Math.max(-100, newPlayer.stats.moodValue - 8);
         }
 
-        if (cls === '🥷' && _meleePassives.ninjaCombo && Math.random() < 0.25) {
+        const ninjaComboCount = _meleePassives.ninjaCombo || 0;
+        const ninjaComboChance = 0.25 + (ninjaComboCount - 1) * 0.15;
+        if (cls === '🥷' && ninjaComboCount > 0 && Math.random() < Math.min(0.8, ninjaComboChance)) {
           const nci = newEnemies.findIndex(e => e.id === enemy.id);
           if (nci !== -1) {
             const ncEnemy = newEnemies[nci];
@@ -632,17 +634,19 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           meleeFloats.push({ id: `hit-p-melee-${prev.turn}`, pos: { ...player.pos }, text: `-${meleeDmgToPlayer}`, color: '#f97316', life: 2 });
         }
 
-        if (_meleePassives.vampiricStrike && meleeDmgToEnemy > 0 && newPlayer.stats.hp < newPlayer.stats.maxHp) {
-          newPlayer.stats.hp = Math.min(newPlayer.stats.maxHp, newPlayer.stats.hp + 1);
+        const vampCount = _meleePassives.vampiricStrike || 0;
+        if (vampCount > 0 && meleeDmgToEnemy > 0 && newPlayer.stats.hp < newPlayer.stats.maxHp) {
+          newPlayer.stats.hp = Math.min(newPlayer.stats.maxHp, newPlayer.stats.hp + vampCount);
         }
         if (_meleePassives.healOnKill > 0 && combatResult.enemyDied && newPlayer.stats.hp < newPlayer.stats.maxHp) {
           const mushHeal = Math.min(_meleePassives.healOnKill, newPlayer.stats.maxHp - newPlayer.stats.hp);
           newPlayer.stats.hp += mushHeal;
           addLog(`🍄 Heal on kill! +${mushHeal} HP`);
         }
-        if (_meleePassives.dodgeHeal && combatResult.dodged && newPlayer.stats.hp < newPlayer.stats.maxHp) {
-          newPlayer.stats.hp = Math.min(newPlayer.stats.maxHp, newPlayer.stats.hp + 1);
-          addLog('🦋 Dodge heals! +1 HP');
+        const dodgeCount = _meleePassives.dodgeHeal || 0;
+        if (dodgeCount > 0 && combatResult.dodged && newPlayer.stats.hp < newPlayer.stats.maxHp) {
+          newPlayer.stats.hp = Math.min(newPlayer.stats.maxHp, newPlayer.stats.hp + dodgeCount);
+          addLog(`🦋 Dodge heals! +${dodgeCount} HP`);
         }
         if (_meleePassives.thorns > 0 && meleeDmgToPlayer > 0) {
           const thornIdx = newEnemies.findIndex(e => e.id === enemy.id);
@@ -1042,7 +1046,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       const campfireBonus = onCampfire ? 2 : 0;
       const stats = { ...prev.player.stats };
       const waitPassives = computeBagPassives(prev.player.inventory);
-      const totalHeal = WAIT_HEAL + (waitPassives.combatRegen ? 1 : 0) + campfireBonus;
+      const regen = waitPassives.combatRegen || 0;
+      const totalHeal = WAIT_HEAL + regen + campfireBonus;
       const atFull = stats.hp >= stats.maxHp;
       if (!atFull) {
         stats.hp = Math.min(stats.maxHp, stats.hp + totalHeal);

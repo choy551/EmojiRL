@@ -1900,32 +1900,34 @@ export default function Game() {
         <div className="h-7 w-px bg-border/40 shrink-0" />
 
         {/* Stats row */}
-        <div className="flex gap-1.5 shrink-0 text-[9px]" data-testid="stat-grid">
-          {(() => {
-            const _ifDualGuns = player.characterClass === '🤠' && player.equipment.mainHand?.weaponKind === 'gun' && player.equipment.offHand?.weaponKind === 'gun';
-            const _ifUnarmed = player.characterClass === '🤠' && !player.equipment.mainHand?.weaponKind && !player.equipment.offHand?.weaponKind;
-            const hudIronFistBonus = (_ifDualGuns && player.ammo <= 0) || _ifUnarmed ? getCowboyUnarmedBonus(player.stats.level) : 0;
-            const _effPlayer = applyEquipmentAndPassives(player);
-            return [['ATK', player.stats.attack + hudIronFistBonus, 'text-orange-400', hudIronFistBonus > 0 ? `ATK ${player.stats.attack} + ${hudIronFistBonus} Iron Fist` : ''], ['DEF', _effPlayer.stats.defense, 'text-blue-400', ''], ['SPD', _effPlayer.stats.speed, 'text-yellow-400', ''], ['EVA', _effPlayer.stats.evasion, 'text-emerald-400', ''], ['LCK', _effPlayer.stats.luck, 'text-pink-400', '']].map(([label, val, color, title]) => (
-              <div key={label as string} title={title as string || undefined} className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
-                <span className={`font-bold ${color as string}`}>{val as number}</span>
-                <span className="text-muted-foreground/50">{label as string}</span>
+        {(() => {
+          const _ifDualGuns = player.characterClass === '🤠' && player.equipment.mainHand?.weaponKind === 'gun' && player.equipment.offHand?.weaponKind === 'gun';
+          const _ifUnarmed = player.characterClass === '🤠' && !player.equipment.mainHand?.weaponKind && !player.equipment.offHand?.weaponKind;
+          const hudIronFistBonus = (_ifDualGuns && player.ammo <= 0) || _ifUnarmed ? getCowboyUnarmedBonus(player.stats.level) : 0;
+          const _effPlayer = applyEquipmentAndPassives(player);
+          const displayedAtk = _effPlayer.stats.attack + hudIronFistBonus;
+          const atkTitle = hudIronFistBonus > 0 ? `ATK ${_effPlayer.stats.attack} + ${hudIronFistBonus} Iron Fist` : '';
+          const crit = Math.min(99, 5 + _effPlayer.stats.luck);
+          const dodge = player.characterClass === '🥷' ? computeNinjaEvasion(_effPlayer) : Math.min(50, _effPlayer.stats.evasion ?? 0);
+          return (
+            <div className="flex gap-1.5 shrink-0 text-[9px]" data-testid="stat-grid">
+              {[['ATK', displayedAtk, 'text-orange-400', atkTitle], ['DEF', _effPlayer.stats.defense, 'text-blue-400', ''], ['SPD', _effPlayer.stats.speed, 'text-yellow-400', ''], ['EVA', _effPlayer.stats.evasion, 'text-emerald-400', ''], ['LCK', _effPlayer.stats.luck, 'text-pink-400', '']].map(([label, val, color, title]) => (
+                <div key={label as string} title={title as string || undefined} className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
+                  <span className={`font-bold ${color as string}`}>{val as number}</span>
+                  <span className="text-muted-foreground/50">{label as string}</span>
+                </div>
+              ))}
+              <div className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
+                <span className="font-bold text-rose-300">{crit}%</span>
+                <span className="text-muted-foreground/50">CRIT</span>
               </div>
-            ));
-          })()}
-          <div className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
-            <span className="font-bold text-rose-300">{Math.min(99, 5 + player.stats.luck)}%</span>
-            <span className="text-muted-foreground/50">CRIT</span>
-          </div>
-          <div className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
-            {(() => {
-              const _effP = applyEquipmentAndPassives(player);
-              const dodge = player.characterClass === '🥷' ? computeNinjaEvasion(_effP) : Math.min(50, _effP.stats.evasion ?? 0);
-              return <span className="font-bold text-sky-300">{dodge}%</span>;
-            })()}
-            <span className="text-muted-foreground/50">DODGE</span>
-          </div>
-        </div>
+              <div className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
+                <span className="font-bold text-sky-300">{dodge}%</span>
+                <span className="text-muted-foreground/50">DODGE</span>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Active food buffs */}
         {(player.stats.activeBuffs ?? []).length > 0 && (

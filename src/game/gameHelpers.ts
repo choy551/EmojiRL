@@ -923,8 +923,9 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
       }
     }
   }
-  if (_freezePassives.combatRegen && playerHp < player.stats.maxHp) {
-    playerHp = Math.min(player.stats.maxHp, playerHp + 1);
+  const regen = _freezePassives.combatRegen || 0;
+  if (regen > 0 && playerHp < player.stats.maxHp) {
+    playerHp = Math.min(player.stats.maxHp, playerHp + regen);
   }
   if (_freezePassives.regeneration > 0 && state.turn % Math.max(1, 6 - _freezePassives.regeneration) === 0 && playerHp < player.stats.maxHp) {
     playerHp = Math.min(player.stats.maxHp, playerHp + 1);
@@ -1530,10 +1531,10 @@ export type BagPassiveSummary = {
   attack: number; defense: number; speed: number; evasion: number; luck: number;
   losBonus: number; stealthBonus: number; stealthPenalty: number;
   canSwim: boolean; burningOnHit: boolean; freezeAura: boolean; advantageDice: boolean;
-  vampiricStrike: boolean; lightningBolt: boolean; thorns: number; bonusLoot: number;
+  vampiricStrike: number; lightningBolt: boolean; thorns: number; bonusLoot: number;
   execBlow: boolean; trueVision: boolean; itemMagnet: boolean; shieldWall: number;
-  healOnKill: number; trueAim: boolean; regeneration: number; ninjaCombo: boolean;
-  royalAura: boolean; combatRegen: boolean; dodgeHeal: boolean;
+  healOnKill: number; trueAim: boolean; regeneration: number; ninjaCombo: number;
+  royalAura: boolean; combatRegen: number; dodgeHeal: number;
 };
 
 export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {
@@ -1541,10 +1542,10 @@ export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {
     attack: 0, defense: 0, speed: 0, evasion: 0, luck: 0,
     losBonus: 0, stealthBonus: 0, stealthPenalty: 0,
     canSwim: false, burningOnHit: false, freezeAura: false, advantageDice: false,
-    vampiricStrike: false, lightningBolt: false, thorns: 0, bonusLoot: 0,
+    vampiricStrike: 0, lightningBolt: false, thorns: 0, bonusLoot: 0,
     execBlow: false, trueVision: false, itemMagnet: false, shieldWall: 0,
-    healOnKill: 0, trueAim: false, regeneration: 0, ninjaCombo: false,
-    royalAura: false, combatRegen: false, dodgeHeal: false,
+    healOnKill: 0, trueAim: false, regeneration: 0, ninjaCombo: 0,
+    royalAura: false, combatRegen: 0, dodgeHeal: 0,
   };
   for (const item of inventory) {
     if (item.consumed || item.isEquipment || !item.bagPassive || item.activeKind || item.healAmount != null || item.ammoAmount != null) continue;
@@ -1557,13 +1558,13 @@ export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {
     acc.losBonus       += p.losBonus       ?? 0;
     acc.stealthBonus   += p.stealthBonus   ?? 0;
     acc.stealthPenalty += p.stealthPenalty ?? 0;
+    const sc = isStackableBagPassive(item) ? (item.stackCount ?? 1) : 1;
     if (p.canSwim)        acc.canSwim        = true;
     if (p.burningOnHit)   acc.burningOnHit   = true;
     if (p.freezeAura)     acc.freezeAura     = true;
     if (p.advantageDice)  acc.advantageDice  = true;
-    if (p.vampiricStrike) acc.vampiricStrike = true;
+    if (p.vampiricStrike) acc.vampiricStrike += sc;
     if (p.lightningBolt)  acc.lightningBolt  = true;
-    const sc = isStackableBagPassive(item) ? (item.stackCount ?? 1) : 1;
     if (p.thorns)         acc.thorns        += sc;
     if (p.bonusLoot)      acc.bonusLoot     += sc;
     if (p.execBlow)       acc.execBlow       = true;
@@ -1573,10 +1574,10 @@ export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {
     if (p.healOnKill)     acc.healOnKill    += sc;
     if (p.trueAim)        acc.trueAim        = true;
     if (p.regeneration)   acc.regeneration  += sc;
-    if (p.ninjaCombo)     acc.ninjaCombo     = true;
+    if (p.ninjaCombo)     acc.ninjaCombo    += sc;
     if (p.royalAura)      acc.royalAura      = true;
-    if (p.combatRegen)    acc.combatRegen    = true;
-    if (p.dodgeHeal)      acc.dodgeHeal      = true;
+    if (p.combatRegen)    acc.combatRegen   += sc;
+    if (p.dodgeHeal)      acc.dodgeHeal     += sc;
   }
   return acc;
 }

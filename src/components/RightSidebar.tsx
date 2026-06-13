@@ -305,21 +305,21 @@ export function RightSidebar({
       {/* Active bag passives — Soul Powers */}
       {(() => {
         const tags: { icon: string; label: string; color: string; desc: string }[] = [];
-        if (p.vampiricStrike) tags.push({ icon: '🩸', label: 'Vampiric', color: 'text-rose-400', desc: 'Melee hits heal you for a small amount.' });
+        if (p.vampiricStrike > 0) tags.push({ icon: '🩸', label: p.vampiricStrike > 1 ? `Vampiric ×${p.vampiricStrike}` : 'Vampiric', color: 'text-rose-400', desc: `Melee hits restore ${p.vampiricStrike} HP.` });
         if (p.lightningBolt)  tags.push({ icon: '⚡', label: 'Chain Arc', color: 'text-yellow-300', desc: 'Melee attacks arc lightning to 1–3 nearby enemies.' });
         if (p.thorns)         tags.push({ icon: '💎', label: `Thorns ×${p.thorns}`, color: 'text-cyan-400', desc: `Reflect ${p.thorns} damage back to attackers in melee (stacks per copy).` });
         if (p.bonusLoot)      tags.push({ icon: '🍀', label: `+Loot ×${p.bonusLoot}`, color: 'text-amber-300', desc: `${Math.round(Math.min(95, 55 + 15 * p.bonusLoot))}% enemy drop chance (stacks per copy; base 55%).` });
         if (p.execBlow)       tags.push({ icon: '💥', label: 'Exec Blow', color: 'text-orange-400', desc: 'Instantly kill low-HP enemies on hit.' });
         if (p.trueVision)     tags.push({ icon: '👁️', label: 'True Vision', color: 'text-violet-400', desc: 'See enemies through walls and in the dark.' });
         if (p.itemMagnet)     tags.push({ icon: '🧲', label: 'Magnet', color: 'text-blue-300', desc: 'Nearby ground items drift toward you.' });
-        if (p.shieldWall)     tags.push({ icon: '🛡️', label: 'Shield Wall', color: 'text-blue-400', desc: 'Reduce incoming damage by 1 (minimum 1).' });
+        if (p.shieldWall)     tags.push({ icon: '🛡️', label: `Shield Wall ×${p.shieldWall}`, color: 'text-blue-400', desc: `${p.shieldWall * 25}% block chance, −${p.shieldWall} incoming dmg (stacks).` });
         if (p.healOnKill)     tags.push({ icon: '🍄', label: `Heal on Kill ×${p.healOnKill}`, color: 'text-emerald-400', desc: `+${p.healOnKill} HP per kill (stacks per copy).` });
         if (p.trueAim)        tags.push({ icon: '🎯', label: 'True Aim', color: 'text-green-400', desc: 'Ranged attacks never miss.' });
-        if (p.regeneration)   tags.push({ icon: '💊', label: 'Regen', color: 'text-teal-300', desc: `+1 HP every ${Math.max(1, 6 - p.regeneration)} turns out of combat (stacks per copy).` });
-        if (p.ninjaCombo)     tags.push({ icon: '🗡️', label: 'Ninja Combo', color: 'text-slate-300', desc: 'Chain attacks deal extra damage when striking in a row.' });
+        if (p.regeneration)   tags.push({ icon: '💊', label: `Regen ×${p.regeneration}`, color: 'text-teal-300', desc: `+1 HP every ${Math.max(1, 6 - p.regeneration)} turns out of combat (stacks per copy).` });
+        if (p.ninjaCombo > 0) tags.push({ icon: '🗡️', label: `Ninja Combo ×${p.ninjaCombo}`, color: 'text-slate-300', desc: `${25 + (p.ninjaCombo-1)*15}% chance of bonus melee strike.` });
         if (p.royalAura)      tags.push({ icon: '👑', label: 'Royal Aura', color: 'text-yellow-400', desc: 'Weak enemies hesitate before attacking you.' });
-        if (p.combatRegen)    tags.push({ icon: '🌊', label: 'Combat Regen', color: 'text-cyan-300', desc: 'Slow HP regen even while in combat.' });
-        if (p.dodgeHeal)      tags.push({ icon: '🦋', label: 'Dodge Heal', color: 'text-purple-300', desc: 'Heal a little HP each time you dodge an attack.' });
+        if (p.combatRegen > 0) tags.push({ icon: '🌊', label: `Combat Regen ×${p.combatRegen}`, color: 'text-cyan-300', desc: `+${p.combatRegen} HP per turn even while in combat (stacks).` });
+        if (p.dodgeHeal > 0) tags.push({ icon: '🦋', label: `Dodge Heal ×${p.dodgeHeal}`, color: 'text-purple-300', desc: `Heal ${p.dodgeHeal} HP each time you dodge an attack (stacks).` });
         if (tags.length === 0) return null;
         return (
           <div>

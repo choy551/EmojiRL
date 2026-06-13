@@ -83,7 +83,7 @@ export interface BagPassive {
   burningOnHit?: boolean;
   freezeAura?: boolean;
   advantageDice?: boolean;
-  vampiricStrike?: boolean;
+  vampiricStrike?: number | boolean;
   lightningBolt?: boolean;
   thorns?: boolean;
   bonusLoot?: boolean;
@@ -95,10 +95,10 @@ export interface BagPassive {
   healOnKill?: boolean;
   trueAim?: boolean;
   regeneration?: boolean;
-  ninjaCombo?: boolean;
+  ninjaCombo?: number | boolean;
   royalAura?: boolean;
-  combatRegen?: boolean;
-  dodgeHeal?: boolean;
+  combatRegen?: number | boolean;
+  dodgeHeal?: number | boolean;
 }
 
 export interface EquipBonus {
@@ -260,8 +260,8 @@ export type BagPassiveSummary = {
   attack: number; defense: number; speed: number; evasion: number; luck: number;
   losBonus: number; stealthBonus: number; stealthPenalty: number;
   canSwim: boolean; burningOnHit: boolean; freezeAura: boolean; advantageDice: boolean;
-  vampiricStrike: boolean; lightningBolt: boolean; thorns: number; bonusLoot: number;
+  vampiricStrike: number; lightningBolt: boolean; thorns: number; bonusLoot: number;
   execBlow: boolean; trueVision: boolean; itemMagnet: boolean; shieldWall: number;
-  healOnKill: number; trueAim: boolean; regeneration: number; ninjaCombo: boolean;
-  royalAura: boolean; combatRegen: boolean; dodgeHeal: boolean;
+  healOnKill: number; trueAim: boolean; regeneration: number; ninjaCombo: number;
+  royalAura: boolean; combatRegen: number; dodgeHeal: number;
 };
